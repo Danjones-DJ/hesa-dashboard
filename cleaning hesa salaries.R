@@ -24,7 +24,7 @@ pubukprns_uk_unis <- c(
   "10007154",  # University of Nottingham
   "10007775",  # Queen Mary and Westfield College, University of London
   "10007803",  # University of St Andrews
-  "10007806",  # University of Bath
+  "10007850",  # University of Bath
   "10007799",  # University of Newcastle Upon Tyne
   "10006842",  # University of Liverpool
   "10007792",  # University of Exeter
@@ -217,7 +217,13 @@ df2 = df %>%
     `BBC and above` = t112,
     `CCC and above` = t096,
     `Below CCC` = t001 + t048 + t064 + t080
+  ) %>%
+  select(
+    !c(kiscourseid, t001, t048, t064, t080, t096, t112, t128, t144, t160, 
+       t176, t192, t208, t224, t240)
   )
+
+
 write_csv(df2, "tariff.uk.csv")
 View(df2 )
 
@@ -362,3 +368,90 @@ write_csv(df5, "nss.uk.csv")
 # View(df5)
 # vis nss -----------------------------------------------------------------
 
+
+
+# Test Econ ---------------------------------------------------------------
+
+nss_raw = read_csv("NSS.csv") %>% janitor::clean_names()
+# View(nss_raw)
+
+df = nss_raw %>%
+  select(pubukprn, kiscourseid, kismode, nsssbj, nsspop, starts_with("t"))
+
+# df
+
+
+df2 = df %>%
+  filter(pubukprn %in% pubukprns_uk_unis) %>%
+  left_join(kc) %>%
+  filter(legal_name == "University College London" & title == "Economics") %>%
+  slice_max(nsspop, n = 1)
+  filter(!is.na(title)) 
+
+df2
+
+fillNSSkiscourse = df2 %>%
+  group_by(pubukprn, kiscourseid, kismode) %>%
+  drop_na(t1) %>%
+  summarise(
+    t1fill = signif(weighted.mean(t1, nsspop, na.rm=TRUE), 3),
+    t2fill = signif(weighted.mean(t2, nsspop, na.rm=TRUE), 3),
+    t3fill = signif(weighted.mean(t3, nsspop, na.rm=TRUE), 3),
+    t4fill = signif(weighted.mean(t4, nsspop, na.rm=TRUE), 3),
+    t5fill = signif(weighted.mean(t5, nsspop, na.rm=TRUE), 3),
+    t6fill = signif(weighted.mean(t6, nsspop, na.rm=TRUE), 3),
+    t7fill = signif(weighted.mean(t7, nsspop, na.rm=TRUE), 3)
+  )
+
+fillNSSuni = df2 %>%
+  group_by(pubukprn, kismode) %>%
+  drop_na(t1) %>%
+  summarise(
+    t1fill2 = signif(weighted.mean(t1, nsspop, na.rm=TRUE), 3),
+    t2fill2 = signif(weighted.mean(t2, nsspop, na.rm=TRUE), 3),
+    t3fill2 = signif(weighted.mean(t3, nsspop, na.rm=TRUE), 3),
+    t4fill2 = signif(weighted.mean(t4, nsspop, na.rm=TRUE), 3),
+    t5fill2 = signif(weighted.mean(t5, nsspop, na.rm=TRUE), 3),
+    t6fill2 = signif(weighted.mean(t6, nsspop, na.rm=TRUE), 3),
+    t7fill2 = signif(weighted.mean(t7, nsspop, na.rm=TRUE), 3)
+  )
+
+# Stage 1: fill from course-level averages
+df3 = df2 %>%
+  left_join(fillNSSkiscourse, by = c("pubukprn", "kiscourseid", "kismode")) %>%
+  mutate(
+    t1 = coalesce(t1, t1fill),
+    t2 = coalesce(t2, t2fill),
+    t3 = coalesce(t3, t3fill),
+    t4 = coalesce(t4, t4fill),
+    t5 = coalesce(t5, t5fill),
+    t6 = coalesce(t6, t6fill),
+    t7 = coalesce(t7, t7fill)
+  )
+
+# Stage 2: fill remaining NAs from uni-level averages
+df4 = df3 %>%
+  left_join(fillNSSuni, by = c("pubukprn", "kismode")) %>%
+  mutate(
+    t1 = coalesce(t1, t1fill2),
+    t2 = coalesce(t2, t2fill2),
+    t3 = coalesce(t3, t3fill2),
+    t4 = coalesce(t4, t4fill2),
+    t5 = coalesce(t5, t5fill2),
+    t6 = coalesce(t6, t6fill2),
+    t7 = coalesce(t7, t7fill2)
+  )
+
+df5 = df4 %>%
+  select(-c(t1fill, t2fill, t3fill, t4fill, t5fill, t6fill, t7fill,
+            t1fill2, t2fill2, t3fill2, t4fill2, t5fill2, t6fill2, t7fill2)) %>%
+  group_by(pubukprn, kiscourseid, kismode, title, legal_name, provaddress) %>%
+  summarise(
+    across(t1:t7, ~ signif(weighted.mean(., nsspop, na.rm = TRUE), 3)),
+    nsspop = sum(nsspop, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(overall = signif(rowMeans(across(t1:t7), na.rm = TRUE), 3))
+
+
+write_csv(df5, "nss.uk.csv")

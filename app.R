@@ -328,8 +328,7 @@ server <- function(input, output, session) {
   filtered_tariff <- reactive({
     req(input$universities, input$degrees)
     tariff %>%
-      filter(legal_name == input$universities, title == input$degrees) %>%
-      distinct(pubukprn, kiscourseid, .keep_all = TRUE)
+      filter(legal_name == input$universities, title == input$degrees)
   })
   
   filtered_joblist <- reactive({
@@ -380,6 +379,8 @@ server <- function(input, output, session) {
     req(input$universities, input$degrees)
     nss %>%
       filter(legal_name == input$universities & title == input$degrees) %>%
+      select(kiscourseid, nsspop, t1, t2, t3, t4, t5, t6, t7, overall) %>%
+      slice_max(nsspop, n = 1) %>%
       summarise(t1, t2, t3, t4, t5, t6, t7, overall)
   })
   
@@ -426,12 +427,13 @@ server <- function(input, output, session) {
   output$entryplot <- renderPlot({
     df <- filtered_tariff()
     
-    df3 <- df %>%
+    df3 = df %>%
+      group_by(pubukprn, kismode, title, kisaimcode, legal_name, provaddress) %>%
+      summarise(across(where(is.numeric), sum, na.rm = TRUE), .groups = "drop") %>%
       mutate(
-        totalPerc = rowSums(across(24:last_col())),
-        across(24:last_col(), ~ round(. / totalPerc * 100, 1))
-      ) %>%
-      select(-totalPerc) %>%
+        totalPerc = rowSums(across(7:last_col())),
+        across(7:last_col(), ~ round(. / totalPerc * 100, 1))
+      ) %>% 
       pivot_longer(
         cols = c(`A*A*A*A* and above`, `A*A*AC and above`, `A*A*A and above`,
                  `AAA and above`, `ABB and above`, `BBC and above`,
