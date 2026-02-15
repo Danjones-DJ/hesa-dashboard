@@ -1,11 +1,12 @@
 # Packages ----------------------------------------------------------------
-pacman::p_load(tidyverse, RColorBrewer, shiny, bslib)
+pacman::p_load(tidyverse, RColorBrewer, shiny, bslib, leaflet)
 options(scipen = 999)
 tariff = read_csv("tariff.uk.csv")
 joblist = read_csv("joblist.uk.csv")
 salaries = read_csv("salaries.uk.csv")
 nss = read_csv("nss.uk.csv")
 NSS.3 = read_csv("NSS.Comparisontables.csv")
+mapdata = st_read("LAD_Map.geojson")
 # Helper: wrap long labels
 wrap_labels <- function(x, width = 18) str_wrap(x, width = width)
 
@@ -242,7 +243,6 @@ ui <- page_fluid(
   custom_css,
   
   navset_tab(
-    
     nav_panel("Tab One",
               
               ## Filter 
@@ -251,25 +251,55 @@ ui <- page_fluid(
                 div(class = "filter-label", HTML("&#9662; FILTERS")),
                 fluidRow(
                   column(12, selectInput("regions", "Select Region",
-                                        choices = c("UK", "England", "Wales", "Scotland", "London"),
-                                        selected = "UK"
-                )))
+                                         choices = c("UK", "England", "Wales", "Scotland", "London"),
+                                         selected = "UK"
+                  )))
               ),
               
               ## Comparison
               
               nav_panel("Leaderboard",
-                        navset_pill(
-                          nav_panel("Overall", tableOutput("tb.overall")),
-                          nav_panel("Teaching", tableOutput("tb.teaching")),
-                          nav_panel("Assessment", tableOutput("tb.ass")),
-                          nav_panel("Support", tableOutput("tb.sup")),
-                          nav_panel("Learning Opportunities", tableOutput("tb.lo")),
-                          nav_panel("Management", tableOutput("tb.mgmt")),
-                          nav_panel("Resources", tableOutput("tb.res")),
-                          nav_panel("Community", tableOutput("tb.com")),
+                        fluidRow(
+                          column(5,
+                                 
+                                 
+                                 div(
+                                   class = "animate-in d1",
+                                   card(
+                                     height= "700px",
+                                     card_header("Leaderboards"),
+                                     card_body(
+                                       navset_pill(
+                                         nav_panel("Overall", tableOutput("tb.overall")),
+                                         nav_panel("Teaching", tableOutput("tb.teaching")),
+                                         nav_panel("Assessment", tableOutput("tb.ass")),
+                                         nav_panel("Support", tableOutput("tb.sup")),
+                                         nav_panel("Learning Opportunities", tableOutput("tb.lo")),
+                                         nav_panel("Management", tableOutput("tb.mgmt")),
+                                         nav_panel("Resources", tableOutput("tb.res")),
+                                         nav_panel("Community", tableOutput("tb.com")),
+                                       )
+                                     )
+                                   )
+                                 )
+
+                          ),
+                          
+                          column(
+                            7,
+                            div(
+                              class = "animate-in d1",
+                              card(
+                                height = "700px",
+                                card_header("Proportion of University entrants achieving A*A*A or above"),
+                                card_body(plotOutput("entrantmap", height = "100%"))
+                              )
+                            )
+                          )
                         )
-              )
+              ),
+              
+              
               
     ),
     
@@ -374,7 +404,27 @@ server <- function(input, output, session) {
   
   
   # Reactives ---------------------------------------------------------------
-  
+  filtered_map = reactive({
+    req(input$regions)
+    region <- input$regions
+    
+    if (region == "UK") {
+      myMapData <- mapdata
+    } else if (region == "Scotland") {
+      myMapData <- mapdata %>% filter(str_starts(LAD24CD, "S"))
+    } else if (region == "Northern Ireland") {
+      myMapData <- mapdata %>% filter(str_starts(LAD24CD, "N"))
+    } else if (region == "England") {
+      myMapData <- mapdata %>% filter(str_starts(LAD24CD, "E"))
+    } else if (region == "Wales") {
+      myMapData <- mapdata %>% filter(str_starts(LAD24CD, "W"))
+    } else if (region == "London") {
+      myMapData <- mapdata %>% filter(str_starts(LAD24CD, "E09"))
+    }
+    
+    myMapData
+    
+  })
   filtered_comparisonnss <- reactive({
     
     req(input$regions)
@@ -694,6 +744,75 @@ server <- function(input, output, session) {
       select(legal_name, Com) %>%
       rename("University" = legal_name, "Learning Community" = Com)
   })
+  
+  output$entrantmap = renderPlot({
+    
+    myMap = filtered_map()
+    
+    ggplot() +
+      geom_sf(data = myMap, fill = "#2a2a2a", colour = "#444444", size = 0.2) +
+      
+      geom_sf(
+        data = myMap %>% filter(!is.na(AtAndAboveA.A.A)),
+        aes(fill = AtAndAboveA.A.A),
+        colour = "#444444", size = 0.2
+      ) +
+      
+      scale_fill_distiller(
+        palette = "Greens",
+        direction = 1,
+        na.value = "#2a2a2a",
+        name = "Entrants with A*A*A\nor Above (%)",
+        labels = function(x) paste0(x, "%"),
+        guide = guide_colorbar(
+          frame.colour = "#666666",
+          ticks.colour = "#666666"
+        )
+      ) +
+      theme_map() + 
+      theme(
+        plot.title = element_text(
+          size = 16,
+          face = "bold",
+          hjust = 0.5
+        ),
+        plot.subtitle = element_text(
+          size = 12,
+          hjust = 0.5,
+          colour = "grey30"
+        ),
+        legend.position = "right",
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(size = 10),
+        plot.caption = element_text(
+          size = 9,
+          colour = "grey40",
+          hjust = 1
+        )
+      ) + 
+      theme(
+        legend.background = element_rect(
+          fill = "#1a1a1a",
+          colour = NA
+        ),
+        legend.box.background = element_rect(
+          fill = "#1a1a1a",
+          colour = "#444444"
+        ),
+        legend.key = element_rect(
+          fill = "#1a1a1a",
+          colour = NA
+        ),
+        legend.title = element_text(
+          face = "bold",
+          colour = "white"
+        ),
+        legend.text = element_text(
+          colour = "white"
+        )
+      )
+    
+  }, res = 180, bg = "transparent")
   
   
 

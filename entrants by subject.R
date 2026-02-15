@@ -1,15 +1,6 @@
-
-
-
-
-
 # Filter Version ----------------------------------------------------------
-
-# Libs --------------------------------------------------------------------
 pacman::p_load(tidyverse, RColorBrewer, skimr, httr, jsonlite, sf, ggthemes)
-
 options(scipen = 999)
-
 
 # Load --------------------------------------------------------------------
 kc_raw = read_csv("KISCOURSE.csv", show_col_types = FALSE) %>% janitor::clean_names()
@@ -29,10 +20,9 @@ kc = kc_raw %>%
 df = tariff_raw
 
 df2 = df %>%
-  select(pubukprn, kiscourseid, kismode, mytarsbj = tarsbj, t001, t048, t064, t080, t096, 
-         t112, t128, t144, t160, t176, t192, t208, t224, t240) %>%
   left_join(kc) %>%
-  filter(title == "Medicine") %>%
+  select(pubukprn, kiscourseid, legal_name, provaddress, kismode, mytarsbj = tarsbj, t001, t048, t064, t080, t096, 
+         t112, t128, t144, t160, t176, t192, t208, t224, t240) %>% 
   mutate(
     `A*A*A*A* and above` = t224 + t240,
     `A*A*AC and above` = t192 + t208, 
@@ -49,8 +39,7 @@ df2 = df %>%
   )
 
 TariffRaw = df2 %>%   drop_na(`A*A*A*A* and above`)
-
-write_csv(TariffRaw, "Tariff.Map.csv")
+# View(TariffRaw)
 
 # Mutate and Organise -----------------------------------------------------
 
@@ -83,6 +72,7 @@ TariffGrouped = Tariff %>%
   ) %>% drop_na()
 
 # View(TariffGrouped)
+
 # Get Postcode and Long/Lat -----------------------------------------------
 postcodeRegex = "[A-Z]{1,2}[0-9][0-9A-Z]?\\s?[0-9][A-Z]{2}"
 
@@ -141,7 +131,6 @@ LAD.Tariff = LocationTariffLad %>%
   ) %>% select(-Total, -`BelowA*A*A`) %>% drop_na()
 
 
-
 # View(LAD.Tariff)
 # Load Map ----------------------------------------------------------------
 url <- "https://services1.arcgis.com/ESMARspQHYMw9BZ9/arcgis/rest/services/Local_Authority_Districts_December_2024_Boundaries_UK_BGC/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson"
@@ -151,7 +140,61 @@ LAD.Map = LAD.SF %>%
   left_join(LAD.Tariff, by=c("LAD24CD" = "LAD.Code"))
 
 
+st_write(LAD.Map, "LAD_Map.geojson")
+
 # -------------------------------------------------------------------------
+
+mapdata = st_read("LAD_Map.geojson")
+
+names(englandmap)
+englandmap = mapdata %>% filter(str_starts(LAD24CD, "E"))
+ggplot() +
+  # Base layer: all areas with just outlines
+  geom_sf(data = englandmap, fill = "white", colour = "#a1a1a1", size = 0.2) +
+  
+  # Filled layer: only areas with data
+  geom_sf(
+    data = englandmap %>% filter(!is.na(AtAndAboveA.A.A)),
+    aes(fill = AtAndAboveA.A.A),
+    colour = "#a1a1a1", size = 0.2
+  ) +
+  
+  scale_fill_distiller(palette = "Blues", direction = 1,
+                       na.value = "grey95", name = "Entrants with A*A*A or Above (%)",
+                       labels = scales::percent_format(scale = 1),
+                       guide = guide_colorbar(
+                         barheight = unit(6, "cm"),
+                         barwidth = unit(0.6, "cm"),
+                         frame.colour = "grey40",
+                         ticks.colour = "grey40"
+                       )
+  ) +
+  
+  labs(
+    title = paste0("High Attainment Across Local Authorities in: "),
+    subtitle = "High Attainment Across Local Authorities in: " Percentage achieving A*A*A or above"
+  ) + 
+  theme_map() + 
+  theme(
+    plot.title = element_text(
+      size = 16,
+      face = "bold",
+      hjust = 0.5
+    ),
+    plot.subtitle = element_text(
+      size = 12,
+      hjust = 0.5,
+      colour = "grey30"
+    ),
+    legend.position = "right",
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 10),
+    plot.caption = element_text(
+      size = 9,
+      colour = "grey40",
+      hjust = 1
+    )
+  )
 
 createEntrantMap = function(sfdata = LAD.Map, region = "UK") {
   
@@ -167,13 +210,7 @@ createEntrantMap = function(sfdata = LAD.Map, region = "UK") {
     mapdata = sfdata %>% filter(str_starts(LAD24CD, "W"))
   } else if (region == "London") {
     mapdata = sfdata %>% filter(str_starts(LAD24CD, "E09"))
-  } else if (region == "Mets") {
-    mapdata = sfdata %>% filter(str_starts(LAD24CD, "E08"))
-  } else if (region == "Unitary") {
-    mapdata = sfdata %>% filter(str_starts(LAD24CD, "E06"))
-  }else if (region == "Non Mets") {
-    mapdata = sfdata %>% filter(str_starts(LAD24CD, "E07"))
-  }
+  } 
   
   myPlot = ggplot() +
     geom_sf(
