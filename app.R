@@ -1,14 +1,16 @@
+# Packages ----------------------------------------------------------------
 pacman::p_load(tidyverse, RColorBrewer, shiny, bslib)
 options(scipen = 999)
 tariff = read_csv("tariff.uk.csv")
 joblist = read_csv("joblist.uk.csv")
 salaries = read_csv("salaries.uk.csv")
 nss = read_csv("nss.uk.csv")
-
+NSS.3 = read_csv("NSS.Comparisontables.csv")
 # Helper: wrap long labels
 wrap_labels <- function(x, width = 18) str_wrap(x, width = width)
 
-# ── Spotify-inspired theme ──────────────────────────────────────────────────
+# Theme -------------------------------------------------------------------
+
 spotify_theme <- bs_theme(
   version = 5,
   bg = "#121212",
@@ -22,7 +24,9 @@ spotify_theme <- bs_theme(
   `enable-rounded` = TRUE
 )
 
-# ── Custom CSS ──────────────────────────────────────────────────────────────
+
+# CSS ---------------------------------------------------------------------
+
 custom_css <- tags$style(HTML("
   @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
@@ -229,82 +233,132 @@ custom_css <- tags$style(HTML("
 "))
 
 
-# UI ──────────────────────────────────────────────────────────────────────────
+
+# UI ----------------------------------------------------------------------
+
+
 ui <- page_fluid(
   theme = spotify_theme,
   custom_css,
   
-  # ── Filter Bar ──
-  div(
-    class = "filter-bar animate-in",
-    div(class = "filter-label", HTML("&#9662; FILTERS")),
-    fluidRow(
-      column(6, selectInput("universities", "University",
-                            choices = unique(salaries$legal_name),
-                            selected = unique(salaries$legal_name)[20])),
-      column(6, selectInput("degrees", "Degree", choices = NULL))
-    )
-  ),
-  
-  # ── Plot Grid ──
-  div(
-    class = "plot-grid",
+  navset_tab(
     
-    # ── Plot Row 1 ──
-    fluidRow(
-      class = "plot-row",
-      column(
-        6,
-        div(
-          class = "animate-in d1",
-          card(
-            card_header("Salary Distribution"),
-            card_body(plotOutput("salaryplot", height = "100%"))
-          )
-        )
-      ),
-      column(
-        6,
-        div(
-          class = "animate-in d2",
-          card(
-            card_header("Entry Tariff Breakdown"),
-            card_body(plotOutput("entryplot", height = "100%"))
-          )
-        )
-      )
+    nav_panel("Tab One",
+              
+              ## Filter 
+              div(
+                class = "filter-bar animate-in",
+                div(class = "filter-label", HTML("&#9662; FILTERS")),
+                fluidRow(
+                  column(12, selectInput("regions", "Select Region",
+                                         choices = c("UK", "England", "Wales", "Scotland", "London"),
+                                         selected = "UK"
+                  )))
+              ),
+              
+              ## Comparison
+              
+              nav_panel("Leaderboard",
+                        navset_pill(
+                          nav_panel("Overall", tableOutput("tb.overall")),
+                          nav_panel("Teaching", tableOutput("tb.teaching")),
+                          nav_panel("Assessment", tableOutput("tb.ass")),
+                          nav_panel("Support", tableOutput("tb.sup")),
+                          nav_panel("Learning Opportunities", tableOutput("tb.lo")),
+                          nav_panel("Management", tableOutput("tb.mgmt")),
+                          nav_panel("Resources", tableOutput("tb.res")),
+                          nav_panel("Community", tableOutput("tb.com")),
+                        )
+              )
+              
     ),
     
-    # ── Plot Row 2 ──
-    fluidRow(
-      class = "plot-row",
-      column(
-        6,
-        div(
-          class = "animate-in d3",
-          card(
-            card_header("Job Outcomes"),
-            card_body(plotOutput("jobplot", height = "100%"))
-          )
-        )
-      ),
-      column(
-        6,
-        div(
-          class = "animate-in d4",
-          card(
-            card_header("NSS Outcomes (Gray = Uni Average)"),
-            card_body(plotOutput("nssplot", height = "100%"))
-          )
-        )
-      )
-    )
+    nav_panel("Degree Overview",
+              # Filter Bar --------------------------------------------------------------
+              div(
+                class = "filter-bar animate-in",
+                div(class = "filter-label", HTML("&#9662; FILTERS")),
+                fluidRow(
+                  column(6, selectInput("universities", "University",
+                                        choices = unique(salaries$legal_name),
+                                        selected = unique(salaries$legal_name)[20])),
+                  column(6, selectInput("degrees", "Degree", choices = NULL))
+                )
+              ),
+              
+              
+              # Plot Grid ---------------------------------------------------------------
+              
+              div(
+                class = "plot-grid",
+                
+                # ── Plot Row 1 ──
+                fluidRow(
+                  class = "plot-row",
+                  column(
+                    6,
+                    div(
+                      class = "animate-in d1",
+                      card(
+                        height = "400px",
+                        card_header("Salary Distribution"),
+                        card_body(plotOutput("salaryplot", height = "100%"))
+                      )
+                    )
+                  ),
+                  column(
+                    6,
+                    div(
+                      class = "animate-in d2",
+                      card(
+                        height = "400px",
+                        card_header("Entry Tariff Breakdown"),
+                        card_body(plotOutput("entryplot", height = "100%"))
+                      )
+                    )
+                  )
+                ),
+                
+                
+                # Plot Row 2 --------------------------------------------------------------
+                
+                fluidRow(
+                  class = "plot-row",
+                  column(
+                    6,
+                    div(
+                      class = "animate-in d3",
+                      card(
+                        height = "400px",
+                        card_header("Job Outcomes"),
+                        card_body(plotOutput("jobplot", height = "100%"))
+                      )
+                    )
+                  ),
+                  column(
+                    6,
+                    div(
+                      class = "animate-in d4",
+                      card(
+                        height = "400px",
+                        card_header("NSS Outcomes (Gray = Uni Average)"),
+                        card_body(plotOutput("nssplot", height = "100%"))
+                      )
+                    )
+                  )
+                )
+              ))
+    
   )
 )
 
 
-# Server ──────────────────────────────────────────────────────────────────────
+
+# Server ------------------------------------------------------------------
 server <- function(input, output, session) {
+  
+  
+  # Observe events ----------------------------------------------------------
   
   observeEvent(input$universities, {
     filtered_degrees <- salaries %>%
@@ -318,7 +372,32 @@ server <- function(input, output, session) {
                       selected = filtered_degrees[1])
   })
   
-  # ── Reactives ──
+  
+  # Reactives ---------------------------------------------------------------
+  
+  filtered_comparisonnss <- reactive({
+    
+    req(input$regions)
+    
+    region <- input$regions
+    
+    if (region == "UK") {
+      myNSS <- NSS.3
+    } else if (region == "Scotland") {
+      myNSS <- NSS.3 %>% filter(str_starts(LAD.Code, "S"))
+    } else if (region == "Northern Ireland") {
+      myNSS <- NSS.3 %>% filter(str_starts(LAD.Code, "N"))
+    } else if (region == "England") {
+      myNSS <- NSS.3 %>% filter(str_starts(LAD.Code, "E"))
+    } else if (region == "Wales") {
+      myNSS <- NSS.3 %>% filter(str_starts(LAD.Code, "W"))
+    } else if (region == "London") {
+      myNSS <- NSS.3 %>% filter(str_starts(LAD.Code, "E09"))
+    }
+    
+    myNSS
+  })
+  
   filtered_salaries <- reactive({
     req(input$universities, input$degrees)
     salaries %>%
@@ -384,7 +463,9 @@ server <- function(input, output, session) {
       summarise(t1, t2, t3, t4, t5, t6, t7, overall)
   })
   
-  # ── Shared plot theme ──
+  
+  # Plot Theme --------------------------------------------------------------
+  
   dark_theme <- function(base_size = 4) {
     theme_classic(base_size = base_size) +
       theme(
@@ -400,7 +481,9 @@ server <- function(input, output, session) {
       )
   }
   
-  # ── Plot 1: Salary ──
+  
+  # Plot 1 ------------------------------------------------------------------
+  
   output$salaryplot <- renderPlot({
     df <- filtered_salaries()
     
@@ -423,7 +506,8 @@ server <- function(input, output, session) {
     
   }, res = 180, bg = "transparent")
   
-  # ── Plot 2: Entry Tariff ──
+  
+  # Plot 2 ------------------------------------------------------------------
   output$entryplot <- renderPlot({
     df <- filtered_tariff()
     
@@ -464,7 +548,9 @@ server <- function(input, output, session) {
     
   }, res = 180, bg = "transparent")
   
-  # ── Plot 3: Jobs ──
+  
+  # Plot 3 ------------------------------------------------------------------
+  
   output$jobplot <- renderPlot({
     df <- filtered_joblist()
     
@@ -484,7 +570,9 @@ server <- function(input, output, session) {
     
   }, res = 180, bg = "transparent")
   
-  # ── Plot 4: NSS ──
+  
+  # Plot 4 ------------------------------------------------------------------
+  
   output$nssplot <- renderPlot({
     courseUniLevels <- filtered_nssCL()
     uniLevels <- filtered_nssUL()
@@ -518,8 +606,99 @@ server <- function(input, output, session) {
       )
     
   }, res = 180, bg = "transparent")
+  # Plot5 -------------------------------------------------------------------
+  output$tb.overall = renderTable({
+    myNSS = filtered_comparisonnss()
+    
+    myNSS %>% 
+      group_by(legal_name) %>%
+      summarise(Overall = weighted.mean(overall, nsspop, na.rm = TRUE)) %>%
+      arrange(desc(Overall)) %>%
+      select(legal_name, Overall) %>%
+      rename("University" = legal_name, "Overall Score" = Overall)
+  })
+  
+  output$tb.teaching = renderTable({
+    myNSS = filtered_comparisonnss()
+    
+    myNSS %>% 
+      group_by(legal_name) %>%
+      summarise(Teaching = weighted.mean(t1, nsspop, na.rm = TRUE)) %>%
+      arrange(desc(Teaching)) %>%
+      select(legal_name, Teaching) %>%
+      rename("University" = legal_name, "Teaching on the course" = Teaching)
+  })
+  
+  output$tb.ass = renderTable({
+    myNSS = filtered_comparisonnss()
+    
+    myNSS %>% 
+      group_by(legal_name) %>%
+      summarise(Ass = weighted.mean(t2, nsspop, na.rm = TRUE)) %>%
+      arrange(desc(Ass)) %>%
+      select(legal_name, Ass) %>%
+      rename("University" = legal_name, "Assessment and Feedback" = Ass)
+  })
+  
+  output$tb.sup = renderTable({
+    myNSS = filtered_comparisonnss()
+    
+    myNSS %>% 
+      group_by(legal_name) %>%
+      summarise(Sup = weighted.mean(t3, nsspop, na.rm = TRUE)) %>%
+      arrange(desc(Sup)) %>%
+      select(legal_name, Sup) %>%
+      rename("University" = legal_name, "Academic Support" = Sup)
+  })
+  
+  output$tb.lo = renderTable({
+    myNSS = filtered_comparisonnss()
+    
+    myNSS %>% 
+      group_by(legal_name) %>%
+      summarise(Lo = weighted.mean(t4, nsspop, na.rm = TRUE)) %>%
+      arrange(desc(Lo)) %>%
+      select(legal_name, Lo) %>%
+      rename("University" = legal_name, "Learning Opportunities" = Lo)
+  })
+  
+  output$tb.mgmt = renderTable({
+    myNSS = filtered_comparisonnss()
+    
+    myNSS %>% 
+      group_by(legal_name) %>%
+      summarise(MGMT = weighted.mean(t5, nsspop, na.rm = TRUE)) %>%
+      arrange(desc(MGMT)) %>%
+      select(legal_name, MGMT) %>%
+      rename("University" = legal_name, "Organisation and Management" = MGMT)
+  })
+  
+  output$tb.res = renderTable({
+    myNSS = filtered_comparisonnss()
+    
+    myNSS %>% 
+      group_by(legal_name) %>%
+      summarise(Res = weighted.mean(t6, nsspop, na.rm = TRUE)) %>%
+      arrange(desc(Res)) %>%
+      select(legal_name, Res) %>%
+      rename("University" = legal_name, "Learning Resources" = Res)
+  })
+  
+  output$tb.com = renderTable({
+    myNSS = filtered_comparisonnss()
+    
+    myNSS %>% 
+      group_by(legal_name) %>%
+      summarise(Com = weighted.mean(t7, nsspop, na.rm = TRUE)) %>%
+      arrange(desc(Com)) %>%
+      select(legal_name, Com) %>%
+      rename("University" = legal_name, "Learning Community" = Com)
+  })
+  
+  
+  
+  
 }
 
-
-# Run the application
+# Run App -----------------------------------------------------------------
 shinyApp(ui = ui, server = server)
