@@ -1,5 +1,5 @@
 # Packages ----------------------------------------------------------------
-pacman::p_load(tidyverse, RColorBrewer, shiny, bslib, leaflet, sf, ggtheme)
+pacman::p_load(tidyverse, RColorBrewer, shiny, bslib, leaflet, sf, ggthemes)
 options(scipen = 999)
 tariff = read_csv("tariff.uk.csv")
 joblist = read_csv("joblist.uk.csv")
